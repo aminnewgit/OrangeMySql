@@ -3,7 +3,7 @@ import json
 import warnings
 import contextlib
 
-from ..utils import log
+from ..utils import orange_sql_log
 from ..pymysql.err import (
     Warning, Error, InterfaceError, DataError,
     DatabaseError, OperationalError, IntegrityError, InternalError,
@@ -236,7 +236,7 @@ class Cursor:
 
         if args is not None:
             query = query % self._escape_args(args, conn)
-        log.debug(query)
+        orange_sql_log.debug(query)
         await self._query(query)
         self._executed = query
         if self._echo:

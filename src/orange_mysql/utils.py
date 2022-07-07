@@ -13,6 +13,9 @@ def get_values_placeholder(length):
   return ','.join(p_list)
 
 
+orange_sql_log = OrangeLog("orange_mysql")
 
+def config_debug_log(show_dev_info: bool):
+  if show_dev_info is True:
+    orange_sql_log.enable_debug_log()
 
-log = OrangeLog()

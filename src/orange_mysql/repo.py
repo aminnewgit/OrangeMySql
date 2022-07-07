@@ -5,7 +5,7 @@ from orange_kit.json import json_dumps,json_loads
 
 from .aiomysql.pool import Pool
 from .init import get_sql_pool
-from .utils import get_values_placeholder,log
+from .utils import get_values_placeholder,orange_sql_log
 from .dto import Page
 
 
@@ -151,6 +151,8 @@ class MySqlQuery(SqlWhereBuilder):
   def __get_val_from_db_return(field:VoField,val):
     if field.db_map_json is True:
       val = json_loads(val)
+    elif field.type == bool:
+      val = val == b'\x01'
     return val
 
   def __create_out_obj(self, data, out_type):
@@ -170,25 +172,25 @@ class MySqlQuery(SqlWhereBuilder):
     return out
 
   async def __get_first(self):
-    log.debug.split_line()
+    orange_sql_log.debug.split_line()
     sql = self.__build_sql()
     sql = "\n".join(sql)
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         await cur.execute(sql, self._where_param_list)
         r = await cur.fetchone()
-        log.debug(r)
+        orange_sql_log.debug(r)
         return r
 
   async def __get_list(self):
-    log.debug.print_split()
+    orange_sql_log.debug.print_split()
     sql = self.__build_sql()
     sql = "\n".join(sql)
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         await cur.execute(sql, self._where_param_list)
         r = await cur.fetchall()
-        log.debug.list(r)
+        orange_sql_log.debug.list(r)
         return r
 
   def __select_from_dto(self,dto_type):
@@ -230,36 +232,36 @@ class MySqlQuery(SqlWhereBuilder):
     return self.__out__list(data_list,out_type)
 
   async def count(self):
-    log.debug.split_line()
+    orange_sql_log.debug.split_line()
     count_sql = self.__build_count_sql()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         await cur.execute(count_sql, self._where_param_list)
         r = await cur.fetchone()
-        log.debug(r)
+        orange_sql_log.debug(r)
         return r[0]
 
   async def __page(self, index:int, size: int):
-    log.debug.print_split()
+    orange_sql_log.debug.print_split()
     count_sql = self.__build_count_sql()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         await cur.execute(count_sql, self._where_param_list)
         r = await cur.fetchone()
         total = r[0]
-        log.debug("total",total)
+        orange_sql_log.debug("total", total)
         if total == 0:
           return [],0
         # todo 分页优化
-        log.debug.print_split()
+        orange_sql_log.debug.print_split()
         sql = self.__build_sql()
         sql.append(f"limit {size*(index-1)},{size}")
         # sql.append("limit 1 10")
         sql = "\n".join(sql)
         await cur.execute(sql, self._where_param_list)
         r = await cur.fetchall()
-        log.debug.print_split()
-        log.debug.list(r)
+        orange_sql_log.debug.print_split()
+        orange_sql_log.debug.list(r)
         return r,total
 
   async def page(self,page:Page,out_type=None):
@@ -323,14 +325,14 @@ class MysqlUpdate(SqlWhereBuilder):
     return sql,param_list
 
   async def execute(self)->int:
-    log.debug.split_line()
+    orange_sql_log.debug.split_line()
     sql,param_list = self.__build_sql_str()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         await cur.execute(sql, param_list)
         await conn.commit()
         affected_num = cur.rowcount
-        log.debug("affected_num", affected_num)
+        orange_sql_log.debug("affected_num", affected_num)
         return affected_num
 
 class BaseRepo:
@@ -365,7 +367,7 @@ class BaseRepo:
       now = datetime.datetime.now()
       obj.ut = now
       obj.ct = now
-    log.debug.print_split()
+    orange_sql_log.debug.print_split()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
         d_dict = obj.__dict__
