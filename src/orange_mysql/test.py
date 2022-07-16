@@ -8,7 +8,7 @@ from .init_tool import log
 
 
 
-class YyjcTask(VoBase):
+class YyjcTaskTest(VoBase):
  id: int
  type: str              = VoField("str vido/rtsp 视频类型")
  input: str             = VoField("str 输入地址 视频地址或流地址")

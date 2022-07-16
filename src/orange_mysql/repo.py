@@ -6,8 +6,18 @@ from orange_kit.json import json_dumps,json_loads
 from .aiomysql.pool import Pool
 from .init import get_sql_pool
 from .utils import get_values_placeholder,orange_sql_log
-from .dto import Page
 
+# todo 查询抽象一个共同的基类
+
+def get_val_from_db_return(field: VoField, val):
+  if val is None: return val
+  if field.db_map_json is True:
+    val = json_loads(val)
+  elif field.type == bool:
+    val = val == b'\x01'
+  if field.type_converter:
+    val = field.type_converter(val, field)
+  return val
 
 class SqlWhereBuilder:
 
@@ -26,28 +36,28 @@ class SqlWhereBuilder:
   def eq(self,field: str, value, enable=True):
     """等于"""
     if enable is True:
-      self._where_sql_list.append(f"(`{field}` = %s)")
+      self._where_sql_list.append(f"({field} = %s)")
       self.__after_add_where(value)
     return self
 
   def gt(self,field: str, value, enable=True):
     """等于"""
     if enable is True:
-      self._where_sql_list.append(f"(`{field}` > %s)")
+      self._where_sql_list.append(f"({field} > %s)")
       self.__after_add_where(value)
     return self
 
   def lt(self,field: str, value, enable=True):
     """小于"""
     if enable is True:
-      self._where_sql_list.append(f"(`{field}` < %s)")
+      self._where_sql_list.append(f"({field} < %s)")
       self.__after_add_where(value)
     return self
 
   def like(self, field: str, value, enable=True):
     """模糊查询"""
     if enable is True:
-      self._where_sql_list.append(f"(`{field}` like '%%{value}%%') ")
+      self._where_sql_list.append(f"({field} like '%%{value}%%') ")
       self._where_sql_list.append("AND")
       # self.__after_add_where(value)
     return self
@@ -55,7 +65,7 @@ class SqlWhereBuilder:
   def in_(self, field: str, value_range, enable=True):
     if enable:
       placeholder = get_values_placeholder(len(value_range))
-      sql = f" (((`{field}`) in ({placeholder})))"
+      sql = f" ((({field}) in ({placeholder})))"
       self._where_sql_list.append(sql)
       self._where_sql_list.append("AND")
       self._where_param_list.extend(value_range)
@@ -137,6 +147,7 @@ class MySqlQuery(SqlWhereBuilder):
     return sql
 
   def __build_count_sql(self):
+    # todo 只构建一次 where 字符串
     sql = [
       f"SELECT  count(*)",
       f"FROM {self.__table_name}"
@@ -147,19 +158,13 @@ class MySqlQuery(SqlWhereBuilder):
     sql = "\n".join(sql)
     return sql
 
-  @staticmethod
-  def __get_val_from_db_return(field:VoField,val):
-    if field.db_map_json is True:
-      val = json_loads(val)
-    elif field.type == bool:
-      val = val == b'\x01'
-    return val
 
+  # 创建输出对象
   def __create_out_obj(self, data, out_type):
     out = out_type()
     for index, field in enumerate(self.__select_field_list):
       val = data[index]
-      val = self.__get_val_from_db_return(field,val)
+      val = get_val_from_db_return(field,val)
       object.__setattr__(out,field.name,val)
     return out
 
@@ -167,12 +172,12 @@ class MySqlQuery(SqlWhereBuilder):
     out = dict()
     for index, field in enumerate(self.__select_field_list):
       val = data[index]
-      val = self.__get_val_from_db_return(field, val)
+      val = get_val_from_db_return(field, val)
       out[field.name] = val
     return out
 
   async def __get_first(self):
-    orange_sql_log.debug.split_line()
+    orange_sql_log.debug.print_split()
     sql = self.__build_sql()
     sql = "\n".join(sql)
     async with self.__pool.acquire() as conn:
@@ -264,13 +269,15 @@ class MySqlQuery(SqlWhereBuilder):
         orange_sql_log.debug.list(r)
         return r,total
 
-  async def page(self,page:Page,out_type=None):
+  async def get_page(self, index:int, size:int, out_type=None):
     """分页查询"""
     out_type = self.__handler_out_type(out_type)
-    out_list,total = await self.__page(page.index,page.size)
-    page.total = total
-    if total == 0: return []
-    return self.__out__list(out_list, out_type)
+    raw_list,total = await self.__page(index,size)
+    if total != 0:
+      out_list = self.__out__list(raw_list, out_type)
+      return out_list,total
+    else:
+      return [],0
 
 class MysqlUpdate(SqlWhereBuilder):
 
@@ -325,7 +332,7 @@ class MysqlUpdate(SqlWhereBuilder):
     return sql,param_list
 
   async def execute(self)->int:
-    orange_sql_log.debug.split_line()
+    orange_sql_log.debug.print_split()
     sql,param_list = self.__build_sql_str()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:
@@ -374,7 +381,7 @@ class BaseRepo:
         d_list = []
         for field in self.__field_list_no_id:
           d = d_dict.get(field.name,None)
-          print(field.name,d,field.db_map_json)
+          # print(field.name,d,field.db_map_json)
           if field.db_map_json is True:
             d = json_dumps(d)
           d_list.append(d)
@@ -397,4 +404,180 @@ class BaseRepo:
       self.__pool,
       self.__entity,
       fill_time)
+
+# 联表查询
+class JoinItem:
+
+  __slots__ = ("entity", "table_name","alias", "on")
+
+  def __init__(self,entity: VoBase, table_name: str, alias: str, on:str=None):
+    self.entity: VoBase = entity
+    self.table_name = table_name
+    self.alias = alias
+    self.on = on
+
+  def get_select_fields_str(self):
+    f_list = [f'{self.alias}.{name}' for name in self.entity.__field_name_list__]
+    return ','.join(f_list)
+
+class LeftJoinQuery(SqlWhereBuilder):
+
+  __slots__ = ("__entity_list", "__prefix_sql",
+               "__from_str","__order_str","__pool")
+
+  def __init__(self,entity_list,prefix_sql,from_str,pool):
+    super().__init__()
+    self.__entity_list = entity_list
+    self.__prefix_sql = prefix_sql
+    self.__order_str = None
+    self.__from_str = from_str
+    self.__pool = pool
+
+  def order(self,field):
+    """正序"""
+    # args = ", ".join([f"{field}" for field in args])
+    # 这样是不行的, 要执行多次 生成一个列表, 然后合成
+    self.__order_str = f"ORDER BY {field}"
+    return self
+
+  def order_desc(self,field):
+    """倒叙"""
+    # args = ", ".join([f"{field} DESC" for field in args])
+    self.__order_str = f"ORDER BY {field} DESC"
+    return self
+
+  def __build_sql(self):
+    sql = [self.__prefix_sql]
+    where_str = self._build_where()
+    if where_str.strip() != "":
+      sql.append(f"WHERE {where_str}")
+    if self.__order_str is not None:
+      sql.append(self.__order_str)
+    return sql
+
+  async def __get_list(self):
+    # orange_sql_log.debug.print_split()
+    sql = self.__build_sql()
+    sql = "\n".join(sql)
+    orange_sql_log.debug.print_split()
+    async with self.__pool.acquire() as conn:
+      async with conn.cursor() as cur:
+        await cur.execute(sql, self._where_param_list)
+        r = await cur.fetchall()
+        orange_sql_log.debug.list(r)
+        return r
+
+  def __create_out_obj(self, data):
+    index = 0
+    out_list = []
+    for entity in self.__entity_list:
+      out = entity()
+      for field in entity.__field_list__:
+        val = data[index]
+        val = get_val_from_db_return(field, val)
+        object.__setattr__(out, field.name, val)
+        index += 1
+      out_list.append(out)
+    return out_list
+
+  def __out__list(self,data_list):
+    return [self.__create_out_obj(data) for data in data_list]
+
+  async def get_list(self):
+    data_list = await self.__get_list()
+    return self.__out__list(data_list)
+
+  def __build_count_sql(self):
+    sql = [
+      f"SELECT  count(*)",
+      self.__from_str
+    ]
+    where_str = self._build_where()
+    if where_str.strip() != "":
+      sql.append(f"WHERE {where_str}")
+    sql = "\n".join(sql)
+    return sql
+
+  async def count(self):
+    orange_sql_log.debug.split_line()
+    count_sql = self.__build_count_sql()
+    async with self.__pool.acquire() as conn:
+      async with conn.cursor() as cur:
+        await cur.execute(count_sql, self._where_param_list)
+        r = await cur.fetchone()
+        orange_sql_log.debug(r)
+        return r[0]
+
+  async def __page(self, index: int, size: int):
+    orange_sql_log.debug.print_split()
+    count_sql = self.__build_count_sql()
+    async with self.__pool.acquire() as conn:
+      async with conn.cursor() as cur:
+        await cur.execute(count_sql, self._where_param_list)
+        r = await cur.fetchone()
+        total = r[0]
+        orange_sql_log.debug("total", total)
+        if total == 0:
+          return [], 0
+        # todo 分页优化
+        orange_sql_log.debug.print_split()
+        sql = self.__build_sql()
+        sql.append(f"limit {size * (index - 1)},{size}")
+        # sql.append("limit 1 10")
+        sql = "\n".join(sql)
+        await cur.execute(sql, self._where_param_list)
+        r = await cur.fetchall()
+        orange_sql_log.debug.print_split()
+        orange_sql_log.debug.list(r)
+        return r, total
+
+  async def get_page(self, index: int, size: int):
+    """分页查询"""
+    raw_list, total = await self.__page(index, size)
+    if total != 0:
+      out_list = self.__out__list(raw_list)
+      return out_list, total
+    else:
+      return [], 0
+
+class LeftJoinRepo:
+
+  __slots__ = ("__entity_list","__prefix_sql",
+               "__from_str", "__pool")
+
+  def __init__(self, join_define_list: list[JoinItem]):
+
+    select_list = []
+    alias_list = []
+    entity_list = []
+    join_str_list = []
+
+    for item in join_define_list:
+      alias = item.alias
+      if alias in alias_list:
+        raise ValueError(f'alias {alias} repeat')
+      alias_list.append(alias)
+      entity_list.append(item.entity)
+      select_list.append(item.get_select_fields_str())
+      join_str_list.append(f'LEFT JOIN {item.table_name} {alias} ON {item.on}')
+
+    mt = join_define_list[0] # main_table
+    join_str_list.pop(0)
+    join_str =  "\n".join(join_str_list)
+    self.__from_str = f'FROM {mt.table_name} {mt.alias}\n{join_str}'
+
+    sql_list = [
+      'SELECT',
+      ",\n".join(select_list),
+      self.__from_str
+    ]
+
+    self.__entity_list = entity_list
+    self.__prefix_sql = '\n'.join(sql_list)
+    self.__pool = get_sql_pool()
+
+
+  def query(self):
+    return LeftJoinQuery(self.__entity_list, self.__prefix_sql,
+                         self.__from_str, self.__pool)
 
