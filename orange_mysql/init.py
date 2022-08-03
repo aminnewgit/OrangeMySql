@@ -48,7 +48,7 @@ def orange_mysql_init(config: OrangeMySqlConfig):
       "autocommit": False,
       "minsize": 1,
       "maxsize": 10,
-      "echo": True,  # 输入Sql 语句
+      "echo": False,       # 输出Sql 语句
       "pool_recycle": -1,  # 连接被回收的秒数，有助于处理池中的陈旧连接，默认值为 -1，表示禁用回收逻辑。,
       "host": config.host,
       "port": config.port,

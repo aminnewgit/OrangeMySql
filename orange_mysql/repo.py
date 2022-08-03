@@ -27,34 +27,34 @@ class SqlWhereBuilder:
     self._where_sql_list = []
     self._where_param_list = []
 
-  def where_sql(self,sql: str, value_list=None, enable=True):
+  def where_sql(self,sql, value_list=None, enable=True):
     if enable is True:
       self._where_sql_list.append(sql)
       if value_list is not None:
         self._where_param_list.extend(value_list)
 
-  def eq(self,field: str, value, enable=True):
+  def eq(self,field, value, enable=True):
     """等于"""
     if enable is True:
       self._where_sql_list.append(f"({field} = %s)")
       self.__after_add_where(value)
     return self
 
-  def gt(self,field: str, value, enable=True):
+  def gt(self,field, value, enable=True):
     """等于"""
     if enable is True:
       self._where_sql_list.append(f"({field} > %s)")
       self.__after_add_where(value)
     return self
 
-  def lt(self,field: str, value, enable=True):
+  def lt(self,field, value, enable=True):
     """小于"""
     if enable is True:
       self._where_sql_list.append(f"({field} < %s)")
       self.__after_add_where(value)
     return self
 
-  def like(self, field: str, value, enable=True):
+  def like(self, field, value, enable=True):
     """模糊查询"""
     if enable is True:
       self._where_sql_list.append(f"({field} like '%%{value}%%') ")
@@ -62,7 +62,7 @@ class SqlWhereBuilder:
       # self.__after_add_where(value)
     return self
 
-  def in_(self, field: str, value_range, enable=True):
+  def in_(self, field, value_range, enable=True):
     if enable:
       placeholder = get_values_placeholder(len(value_range))
       sql = f" ((({field}) in ({placeholder})))"
@@ -294,7 +294,7 @@ class MysqlUpdate(SqlWhereBuilder):
     self.__update_sql_list = []
     self.__update_param_list = []
 
-  def set(self,field:str,value,enable=True):
+  def set(self,field,value,enable=True):
     """
     UPDATE `test_song` SET `title` = ?p_0, `singer` = ?p_1, `ct` = now(3)
     WHERE (`id` = 1)
@@ -350,10 +350,10 @@ class BaseRepo:
     "__insert_sql","__field_list_no_id"
   )
 
-  def __init__(self, table_name,entity: VoBase):
+  def __init__(self, table_name,entity):
     self.__table_name = table_name
     self.__pool = get_sql_pool()
-    self.__entity = entity
+    self.__entity: VoBase = entity
     # 生成insert sql 语句
     self.__build_insert_sql()
     self.__build_all_fields_str()
@@ -410,7 +410,7 @@ class JoinItem:
 
   __slots__ = ("entity", "table_name","alias", "on")
 
-  def __init__(self,entity: VoBase, table_name: str, alias: str, on:str=None):
+  def __init__(self,entity, table_name, alias, on=None):
     self.entity: VoBase = entity
     self.table_name = table_name
     self.alias = alias
