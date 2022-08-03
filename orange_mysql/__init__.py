@@ -1,5 +1,6 @@
 from .init import orange_mysql_init,OrangeMySqlConfig
 from .repo import BaseRepo
+from .field.sql_field import SqlField
 
 
 

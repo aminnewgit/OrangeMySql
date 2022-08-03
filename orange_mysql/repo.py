@@ -1,7 +1,7 @@
 import datetime
-from orange_kit.model import VoBase, VoField
+from orange_kit.model import VoBase
 from orange_kit.json import json_dumps,json_loads
-
+from .field.sql_field import SqlField
 
 from .aiomysql.pool import Pool
 from .init import get_sql_pool
@@ -9,15 +9,13 @@ from .utils import get_values_placeholder,orange_sql_log
 
 # todo 查询抽象一个共同的基类
 
-def get_val_from_db_return(field: VoField, val):
+def get_val_from_db_return(field: SqlField, val):
   if val is None: return val
-  if field.db_map_json is True:
+  if field.map_json is True:
     val = json_loads(val)
-  elif field.type == bool:
-    val = val == b'\x01'
-  if field.type_converter:
-    val = field.type_converter(val, field)
-  return val
+  if val is None: return val
+  return field.type_converter(val)
+
 
 class SqlWhereBuilder:
 
@@ -367,7 +365,7 @@ class BaseRepo:
     placeholder = get_values_placeholder(field_name_list.__len__())
     # noinspection SqlNoDataSourceInspection
     self.__insert_sql = f"insert into {self.__table_name} ({','.join(field_name_list)}) VALUES({placeholder})"
-    self.__field_list_no_id: list[VoField] = [i for i in self.__entity.__field_list__ if i.name != "id"]
+    self.__field_list_no_id: list[SqlField] = [i for i in self.__entity.__field_list__ if i.name != "id"]
 
   async def insert(self,obj,fill_time=True):
     if fill_time is True:
@@ -382,7 +380,7 @@ class BaseRepo:
         for field in self.__field_list_no_id:
           d = d_dict.get(field.name,None)
           # print(field.name,d,field.db_map_json)
-          if field.db_map_json is True:
+          if field.map_json is True:
             d = json_dumps(d)
           d_list.append(d)
         await cur.execute(self.__insert_sql,d_list)
