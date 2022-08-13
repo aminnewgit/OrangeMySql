@@ -128,13 +128,12 @@ class _StreamReader(asyncio.StreamReader):
 
 
 class Connection:
-    """Representation of a socket with a mysql server.
-
-    The proper way to get an instance of this class is to call
-    connect().
+    """
+    mysql 连接
+    获取此类的正确方法是，调用函数connect().
     """
 
-    def __init__(self, host="localhost", user=None, password="",
+    def __init__(self, host:str="localhost", user=None, password="",
                  db=None, port=3306, unix_socket=None,
                  charset='', sql_mode=None,
                  read_default_file=None, conv=decoders, use_unicode=None,
@@ -144,53 +143,52 @@ class Connection:
                  local_infile=False, loop=None, ssl=None, auth_plugin='',
                  program_name='', server_public_key=None):
         """
-        Establish a connection to the MySQL database. Accepts several
+        建立到MySQL数据库的连接.
         arguments:
+        :param host: 数据库地址
+        :param user: 用户名
+        :param password: 密码
+        :param db: 指定数据库
+        :param port: 数据库断开
+        :param unix_socket: 使用unix套接字
+        :param charset: 设置字符集
+        :param sql_mode: 设置 SQL_MODE
 
-        :param host: Host where the database server is located
-        :param user: Username to log in as
-        :param password: Password to use.
-        :param db: Database to use, None to not use a particular one.
-        :param port: MySQL port to use, default is usually OK.
-        :param unix_socket: Optionally, you can use a unix socket rather
-        than TCP/IP.
-        :param charset: Charset you want to use.
-        :param sql_mode: Default SQL_MODE to use.
-        :param read_default_file: Specifies  my.cnf file to read these
-            parameters from under the [client] section.
-        :param conv: Decoders dictionary to use instead of the default one.
-            This is used to provide custom marshalling of types.
-            See converters.
-        :param use_unicode: Whether or not to default to unicode strings.
-        :param  client_flag: Custom flags to send to MySQL. Find
-            potential values in constants.CLIENT.
-        :param cursorclass: Custom cursor class to use.
-        :param init_command: Initial SQL statement to run when connection is
-            established.
-        :param connect_timeout: Timeout before throwing an exception
-            when connecting.
-        :param read_default_group: Group to read from in the configuration
-            file.
-        :param autocommit: Autocommit mode. None means use server default.
-            (default: False)
-        :param local_infile: boolean to enable the use of LOAD DATA LOCAL
-            command. (default: False)
+        :param read_default_file: 指定一个配置文件（my.cnf）从client字段下读取配置
+        :param read_default_group: 配置文件中的默认字段名
+
+        :param conv: Decoders dictionary to use instead of the default one
+                     类型解码字段，用于代替默认的，用于扩展用户类型转换
+                     This is used to provide custom marshalling of types
+                     详情见 converters 模块
+        :param use_unicode: 是否使用 unicode strings
+        :param  client_flag: 自定义client_flag 在这里找代替值 constants.CLIENT
+        :param cursorclass: 自定义cursor class
+        :param init_command: 成功连接后的初始化sql语句 SQL statement
+        :param connect_timeout: 连接超时时间，超时后会抛出一个异常
+        :param autocommit: 自动提交模式 (default: False)
+        :param local_infile: boolean to enable the use of LOAD DATA LOCAL command. (default: False)
+                             从本地文件导入数据库命令
+
         :param ssl: Optional SSL Context to force SSL
-        :param auth_plugin: String to manually specify the authentication
-            plugin to use, i.e you will want to use mysql_clear_password
-            when using IAM authentication with Amazon RDS.
+        :param auth_plugin: String to manually specify the authentication plugin to use
+                            手动指定身份验证插件 值是一个字符串
+             i.e you will want to use mysql_clear_password when using IAM authentication with Amazon RDS
             (default: Server Default)
-        :param program_name: Program name string to provide when
-            handshaking with MySQL. (omitted by default)
-        :param server_public_key: SHA256 authentication plugin public
-            key value.
+        :param server_public_key: SHA256 authentication plugin public key value
+
+        :param program_name: 与MySQL握手成功后提供给MySQL的程序名称(omitted by default 默认省略)
         :param loop: asyncio loop
         """
         self._loop = loop or asyncio.get_event_loop()
 
+        # version_info是一个包含了版本号5个组成部分的元祖，
+        # 这5个部分分别是主要版本号（major）、次要版本号（minor）、微型版本号（micro）、发布级别（releaselevel）和序列号（serial）。
+        # 所以这里是 没有指定是否使用unicode, 只要是python3 就是使用
         if use_unicode is None and sys.version_info[0] > 2:
             use_unicode = True
 
+        # 读取配置文件
         if read_default_file:
             if not read_default_group:
                 read_default_group = "client"

@@ -45,9 +45,9 @@ def orange_mysql_init(config: OrangeMySqlConfig):
     loop = asyncio.get_running_loop()
     _config = {
       "loop": loop,
-      "autocommit": False,
+      "autocommit": True,
       "minsize": 1,
-      "maxsize": 10,
+      "maxsize": 16,
       "echo": False,       # 输出Sql 语句
       "pool_recycle": -1,  # 连接被回收的秒数，有助于处理池中的陈旧连接，默认值为 -1，表示禁用回收逻辑。,
       "host": config.host,

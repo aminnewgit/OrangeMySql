@@ -19,3 +19,7 @@ def config_debug_log(show_dev_info: bool):
   if show_dev_info is True:
     orange_sql_log.enable_debug_log()
 
+class SqlError(Exception):
+  def __init__(self,msg):
+    self.msg = msg
+

@@ -5,9 +5,13 @@ from .field.sql_field import SqlField
 
 from .aiomysql.pool import Pool
 from .init import get_sql_pool
-from .utils import get_values_placeholder,orange_sql_log
+from .utils import get_values_placeholder, orange_sql_log, SqlError
+
 
 # todo 查询抽象一个共同的基类
+# todo 记录所有repo实例 在数据库完成初始化的时候, 把连接池赋予所有repo,
+# todo 或者, 一开始就有 连接池这个对应, 只是没有连接, 任何时候实例化都不会出问题
+# 刚觉第二种更实用 这要优化sql orm 时候来做
 
 def get_val_from_db_return(field: SqlField, val):
   if val is None: return val
@@ -35,6 +39,13 @@ class SqlWhereBuilder:
     """等于"""
     if enable is True:
       self._where_sql_list.append(f"({field} = %s)")
+      self.__after_add_where(value)
+    return self
+
+  def ne(self, field, value, enable=True):
+    """不等于"""
+    if enable is True:
+      self._where_sql_list.append(f"({field} != %s)")
       self.__after_add_where(value)
     return self
 
@@ -280,13 +291,15 @@ class MySqlQuery(SqlWhereBuilder):
 class MysqlUpdate(SqlWhereBuilder):
 
   __slots__ = ("__pool","__table_name","__entity",
-               "__update_sql_list","__update_param_list","__fill_time")
+               "__update_sql_list","__update_param_list",
+               "__fill_time","__field_dict")
 
   def __init__(self, table_name, pool, entity, fill_time):
     super().__init__()
     self.__pool: Pool = pool
     self.__table_name = table_name
     self.__entity: VoBase = entity
+    self.__field_dict:dict[str,SqlField] = entity.__field_dict__
     self.__fill_time = fill_time
 
     self.__update_sql_list = []
@@ -297,7 +310,16 @@ class MysqlUpdate(SqlWhereBuilder):
     UPDATE `test_song` SET `title` = ?p_0, `singer` = ?p_1, `ct` = now(3)
     WHERE (`id` = 1)
     """
+    # todo vo 的field 不要替换为str, 直接是field字段, 看看怎么样
     if enable is False: return
+
+    # 处理json_dumps, 如果后期进行对象跟踪, 可能会更好一点
+    field_obj = self.__field_dict.get(field)
+    if field_obj is None:
+      raise SqlError(f"update sql '{field}' not entity field")
+    elif field_obj.map_json is True:
+      value = json_dumps(value)
+
     self.__update_sql_list.append(f"`{field}`=%s")
     self.__update_param_list.append(value)
 
@@ -342,12 +364,17 @@ class MysqlUpdate(SqlWhereBuilder):
 
 class BaseRepo:
 
+  _instance = None
+  def __new__(cls, *args, **kwargs):
+    if cls._instance is None:
+      cls._instance = super().__new__(cls)
+    return cls._instance
+
   __slots__ = (
     "__table_name","__pool",
     "__entity","__all_fields_str",
-    "__insert_sql","__field_list_no_id"
+    "__insert_sql","__field_list_no_id",
   )
-
   def __init__(self, table_name,entity):
     self.__table_name = table_name
     self.__pool = get_sql_pool()
@@ -355,7 +382,6 @@ class BaseRepo:
     # 生成insert sql 语句
     self.__build_insert_sql()
     self.__build_all_fields_str()
-
 
   def __build_all_fields_str(self):
     self.__all_fields_str = ','.join(self.__entity.__field_name_list__)
@@ -386,9 +412,6 @@ class BaseRepo:
         await cur.execute(self.__insert_sql,d_list)
         obj.id = cur.lastrowid
         await conn.commit()
-
-
-
 
   def query(self)->MySqlQuery:
     return MySqlQuery(self.__table_name,
