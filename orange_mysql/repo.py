@@ -246,7 +246,7 @@ class MySqlQuery(SqlWhereBuilder):
     return self.__out__list(data_list,out_type)
 
   async def count(self):
-    orange_sql_log.debug.split_line()
+    # orange_sql_log.debug.print_split()
     count_sql = self.__build_count_sql()
     async with self.__pool.acquire() as conn:
       async with conn.cursor() as cur:

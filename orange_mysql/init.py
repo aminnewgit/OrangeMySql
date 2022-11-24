@@ -1,6 +1,6 @@
 import asyncio
 
-from orange_kit.model import VoBase, VoField
+from orange_kit.model import VoBase, VoField, DtoField
 
 from .aiomysql import create_pool
 from .aiomysql.pool import Pool
@@ -15,18 +15,11 @@ from .utils import orange_sql_log, config_debug_log
 
 
 class OrangeMySqlConfig(VoBase):
-  """
-  mysql 配置
-  -----
-  Parameters
-
-  """
-  host:str       = VoField("host地址 例如 192.168.1.50",)
-  port:int       = VoField("端口", default=3306)
-  user:str       = VoField("用户名")
-  password:str   = VoField("密码")
-  db:str         = VoField("数据库")
-
+  host:str       = DtoField("host地址 例如 192.168.1.50",require=True)
+  port:int       = DtoField("端口", default=3306)
+  user:str       = DtoField("用户名",require=True)
+  password:str   = DtoField("密码",require=True)
+  db:str         = DtoField("数据库",require=True)
   enable_debug_info_show: bool = VoField("输出开发信息",default=False)
 
 
@@ -36,7 +29,7 @@ class OrangeMySqlConfig(VoBase):
 
 sql_pool = None
 
-def orange_mysql_init(config: OrangeMySqlConfig):
+def orange_mysql_init_func_factory(config: OrangeMySqlConfig):
 
   config_debug_log(config.enable_debug_info_show)
 
@@ -56,7 +49,7 @@ def orange_mysql_init(config: OrangeMySqlConfig):
       "password": config.password,
       "db": config.db,
     }
-    orange_sql_log.debug(f"orange mysql connect to {config.host}:{config.port}", end=" ")
+    orange_sql_log.debug.print(f"orange mysql connect to {config.host}:{config.port}", end=" ")
 
     pool = await create_pool(**_config)
     orange_sql_log.debug("ok")
