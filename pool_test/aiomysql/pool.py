@@ -129,6 +129,7 @@ class Pool(asyncio.AbstractServer):
 
         self._closed = True
 
+    # acquire 获得
     def acquire(self)->Connection:
         """Acquire free connection from the pool."""
         coro = self._acquire()

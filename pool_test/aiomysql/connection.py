@@ -522,12 +522,11 @@ class Connection:
                                  self._unix_socket
                 self._secure = True
             else:
-                self._reader, self._writer = await \
-                    asyncio.wait_for(
-                        _open_connection(
-                            self._host,
-                            self._port),
-                        timeout=self.connect_timeout)
+                # wait_for 等待一个可等待的对象并,设置超时(await 不能设置超时)
+                coroutine = _open_connection(self._host, self._port)
+                # 这里为了看的方便,实际放到函数里就好了
+                self._reader, self._writer = await asyncio.wait_for(coroutine, timeout=self.connect_timeout)
+
                 self._set_keep_alive()
                 self._set_nodelay(True)
                 self.host_info = "socket %s:%d" % (self._host, self._port)
@@ -586,6 +585,7 @@ class Connection:
         self._write_bytes(data)
         self._next_seq_id = (self._next_seq_id + 1) % 256
 
+    # packet 包
     async def _read_packet(self, packet_type=MysqlPacket):
         """Read an entire "mysql packet" in its entirety from the network
         and return a MysqlPacket type that represents the results.
