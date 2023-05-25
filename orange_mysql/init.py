@@ -57,6 +57,7 @@ def orange_mysql_init_func_factory(config: OrangeMySqlConfig):
 
     def close_pool():
       pool.close()
+
     return close_pool
 
   return init_func

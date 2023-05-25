@@ -288,6 +288,9 @@ class MySqlQuery(SqlWhereBuilder):
     else:
       return [],0
 
+  def get_page_sync(self):
+    pass
+
 class MysqlUpdate(SqlWhereBuilder):
 
   __slots__ = ("__pool","__table_name","__entity",
@@ -375,6 +378,7 @@ class BaseRepo:
     "__entity","__all_fields_str",
     "__insert_sql","__field_list_no_id",
   )
+
   def __init__(self, table_name,entity):
     self.__table_name = table_name
     self.__pool = get_sql_pool()
@@ -425,6 +429,9 @@ class BaseRepo:
       self.__pool,
       self.__entity,
       fill_time)
+
+
+
 
 # 联表查询
 class JoinItem:
